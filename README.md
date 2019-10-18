@@ -12,3 +12,12 @@ This allows better error handling and concurrent submission of requests (but be 
 - `ecmwf-api-client`, set up according to [its documentation](https://github.com/ecmwf/ecmwf-api-client#configure)
 - `concurrent.futures`, i.e. Python 3.2 or newer
 
+
+## Installation
+
+To install as a package, run
+
+    pip install .
+
+from the root of the repository.
+

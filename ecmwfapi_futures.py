@@ -7,6 +7,8 @@ from concurrent import futures
 from ecmwfapi import api
 
 
+__version__ = "1.0.0"
+
 __all__ = ("ECMWFDataServer", "wait", "as_completed")
 
 
