@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="ecmwfapi_futures",
+    name="ecmwf-api-futures",
     description="A future-based interface to ecmwf-api-client",
     version="1.0.0",
     author="Christopher Polster",
