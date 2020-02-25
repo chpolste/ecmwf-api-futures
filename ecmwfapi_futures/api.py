@@ -1,15 +1,8 @@
-"""A future-based interface to ecmwf-api-client"""
-
 import warnings
 import datetime as dt
 from concurrent import futures
 
 from ecmwfapi import api
-
-
-__version__ = "1.0.0"
-
-__all__ = ("ECMWFDataServer", "wait", "as_completed")
 
 
 
@@ -23,13 +16,13 @@ class ECMWFDataServer:
     """A future-based replacement for `ecmwfapi.ECMWFDataServer`
     
     A wrapper around `concurrent.futures.ThreadPoolExecutor` that implements
-    the retrieve method of `ecmwfapi.ECMWFDataServer`.
+    the `retrieve` method of `ecmwfapi.ECMWFDataServer`.
 
     Can be used as a context manager that cleans up threads without having to
     call `ECMWFDataServer.shutdown()` explicitly.
     """
 
-    def __init__(self, max_workers=1, defaults=None, url=None, key=None, email=None):
+    def __init__(self, url=None, key=None, email=None, max_workers=1, defaults=None):
         """Start a thread pool for request submission to the ECMWF server
         
         `max_workers` specifies how many requests can be executed concurrently.
@@ -73,7 +66,40 @@ class ECMWFDataServer:
         request_dct = self.defaults.copy()
         if request is not None:
             request_dct.update(request)
-        return APIRequestFuture(self, request_dct, status_callback=status_callback)
+        # Unify handling of service argument for ECMWFDataServer and
+        # ECMWFService by allowing a service field in requests analogous to the
+        # dataset field.
+        service = None
+        assert not ("dataset" in request_dct and "service" in request_dct)
+        if "dataset" in request_dct:
+            service = "datasets/{}".format(request_dct["dataset"])
+        if "service" in request_dct:
+            service = "services/{}".format(request_dct["service"])
+        if service is None:
+            raise ValueError("dataset or service must be specified in the request")
+        # Submit request, return associated future
+        return APIRequestFuture(self, service, request_dct, status_callback=status_callback)
+
+
+
+class ECMWFService(ECMWFDataServer):
+    """A future-based replacement for `ecmwfapi.ECMWFService`
+
+    Implements the `execute` method of `ecmwfapi.ECMWFService` in terms of
+    `ECMWFDataServer.request`. See `ECMWFDataServer` for more information.
+    """
+
+    def __init__(self, service, url=None, key=None, email=None, max_workers=1, defaults=None):
+        """See `ECMWFDataServer.__init__`"""
+        super().__init__(url, key, email, max_workers, defaults)
+        self.defaults["service"] = service
+
+    def execute(self, request=None, target=None, status_callback=None):
+        """Submit a request to the ECMWF server and return a future that tracks its progess"""
+        request = dict() if request is None else request.copy()
+        if target is not None:
+            request["target"] = target
+        return self.retrieve(request=request, status_callback=status_callback)
 
 
 
@@ -84,7 +110,7 @@ class APIRequestFuture:
     should not be created directly.
     """
     
-    def __init__(self, pool, request, status_callback=None):
+    def __init__(self, pool, service, request, status_callback=None):
         self.messages = []
         self.request = request
         self._status = "waiting"
@@ -103,7 +129,6 @@ class APIRequestFuture:
         # Instanciate and execute ecmwfapi.APIRequest object in separate
         # thread. Both communicate with the ECMWF server and are blocking.
         def execute():
-            service = "datasets/{}".format(request["dataset"])
             # Suppress any calls to print in ecmwfapi by setting quiet=True and
             # verbose=False. Other messages are passed to self._recv.
             apireq = api.APIRequest(url=pool.url, service=service, email=pool.email, key=pool.key,
