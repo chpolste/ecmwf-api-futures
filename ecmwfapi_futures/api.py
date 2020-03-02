@@ -115,6 +115,9 @@ class APIRequestFuture:
         self.request = request
         self._status = "waiting"
         self.id = None
+        # Pop target from the request dict, the server should not care about
+        # local path issues
+        self.target = request.pop("target")
         # ecmwfapi.APIRequest result fields
         self.href = None
         self.size = None
@@ -134,7 +137,7 @@ class APIRequestFuture:
             apireq = api.APIRequest(url=pool.url, service=service, email=pool.email, key=pool.key,
                     log=self._recv, quiet=True, verbose=False, news=True)
             try:
-                return apireq.execute(request, request["target"])
+                return apireq.execute(request, self.target)
             # HTTP Errors are communicated as APIExeceptions. The actual HTTP
             # error message must be recovered from the request's connection.
             except api.APIException as e:
@@ -148,7 +151,7 @@ class APIRequestFuture:
 
     def __repr__(self):
         elapsed_min = self.elapsed / dt.timedelta(minutes=1)
-        return "<APIRequestFuture id={} status={} elapsed={:.2f}min>".format(self.id, self.status, elapsed_min)
+        return "<APIRequestFuture id={} status={} elapsed={:.2f}min target={}>".format(self.id, self.status, elapsed_min, self.target)
 
     @property
     def elapsed(self):
