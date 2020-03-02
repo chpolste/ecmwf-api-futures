@@ -133,7 +133,15 @@ class APIRequestFuture:
             # verbose=False. Other messages are passed to self._recv.
             apireq = api.APIRequest(url=pool.url, service=service, email=pool.email, key=pool.key,
                     log=self._recv, quiet=True, verbose=False, news=True)
-            return apireq.execute(request, request["target"])
+            try:
+                return apireq.execute(request, request["target"])
+            # HTTP Errors are communicated as APIExeceptions. The actual HTTP
+            # error message must be recovered from the request's connection.
+            except api.APIException as e:
+                conn = apireq.connection
+                if hasattr(conn, "last") and "error" in conn.last and "messages" in conn.last:
+                    e.value += "\n".join(conn.last["messages"])
+                raise
         self._future = pool._submit(execute)
         # Add a callback that processes the results of the API request
         self._future.add_done_callback(self._callback)
