@@ -133,8 +133,8 @@ class APIRequestFuture:
         self._status_callbacks = []
         if status_callback is not None:
             self.add_status_callback(status_callback)
-        # Keep track of elapsed time between status changes
-        ... # TODO
+        # Keep track of elapsed time at all status changes
+        self._elapsed_log = []
         # If a log file should be written, create it and initialize
         self.log_file = None
         if write_log:
@@ -192,6 +192,9 @@ class APIRequestFuture:
     @status.setter
     def status(self, status):
         self._status = status
+        # Record the elapsed time of the status change
+        self._elapsed_log.append((status, self.elapsed))
+        # Communicate change of status to all registered callbacks
         for callback in self._status_callbacks:
             callback(self)
 
