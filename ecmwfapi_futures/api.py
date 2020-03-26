@@ -22,7 +22,7 @@ class ECMWFDataServer:
     call `ECMWFDataServer.shutdown()` explicitly.
     """
 
-    def __init__(self, url=None, key=None, email=None, max_workers=1, defaults=None):
+    def __init__(self, url=None, key=None, email=None, max_workers=1, defaults=None, write_logs=True):
         """Start a thread pool for request submission to the ECMWF server
         
         `max_workers` specifies how many requests can be executed concurrently.
@@ -30,10 +30,13 @@ class ECMWFDataServer:
         `defaults` can be set to a request template that provides non-changing
         fields for every request submitted with `ECMWFDataServer.retrieve()`.
 
+        `write_logs` TODO
+
         If `url`, `key` and `email` are not specified the API authentication
         information is read from the environment.
         """
         self.defaults = dict() if defaults is None else defaults.copy()
+        self.write_logs = write_logs
         # Obtain authentication information from environment if not given
         if url is None or key is None or email is None:
             key, url, email = api.get_apikey_values()
@@ -65,6 +68,7 @@ class ECMWFDataServer:
         """Submit a request to the ECMWF server and return a future that tracks its progess"""
         request_dct = self.defaults.copy()
         if request is not None:
+            # TODO: parse "regular" text-only mars requests if request is a string
             request_dct.update(request)
         # Unify handling of service argument for ECMWFDataServer and
         # ECMWFService by allowing a service field in requests analogous to the
@@ -78,7 +82,7 @@ class ECMWFDataServer:
         if service is None:
             raise ValueError("dataset or service must be specified in the request")
         # Submit request, return associated future
-        return APIRequestFuture(self, service, request_dct, status_callback=status_callback)
+        return APIRequestFuture(self, service, request_dct, status_callback=status_callback, write_log=self.write_logs)
 
 
 
@@ -89,9 +93,9 @@ class ECMWFService(ECMWFDataServer):
     `ECMWFDataServer.request`. See `ECMWFDataServer` for more information.
     """
 
-    def __init__(self, service, url=None, key=None, email=None, max_workers=1, defaults=None):
+    def __init__(self, service, url=None, key=None, email=None, max_workers=1, defaults=None, write_logs=True):
         """See `ECMWFDataServer.__init__`"""
-        super().__init__(url, key, email, max_workers, defaults)
+        super().__init__(url, key, email, max_workers, defaults, write_logs)
         self.defaults["service"] = service
 
     def execute(self, request=None, target=None, status_callback=None):
@@ -110,7 +114,7 @@ class APIRequestFuture:
     should not be created directly.
     """
     
-    def __init__(self, pool, service, request, status_callback=None):
+    def __init__(self, pool, service, request, status_callback=None, write_log=True):
         self.messages = []
         self.request = request
         self._status = "waiting"
@@ -129,6 +133,15 @@ class APIRequestFuture:
         self._status_callbacks = []
         if status_callback is not None:
             self.add_status_callback(status_callback)
+        # Keep track of elapsed time between status changes
+        ... # TODO
+        # If a log file should be written, create it and initialize
+        self.log_file = None
+        if write_log:
+            ... # Write the request parameters TODO
+            ... # Open a section for the messages that the request sends TODO
+            ... # Finally (this must happen somewhere else), write information
+                # about the future (elapsed times, error codes, etc.). TODO
         # Instanciate and execute ecmwfapi.APIRequest object in separate
         # thread. Both communicate with the ECMWF server and are blocking.
         def execute():
@@ -193,6 +206,10 @@ class APIRequestFuture:
             raise TypeError("Argument is not callable")
         self._status_callbacks.append(fn)
 
+    def repeat_download(self):
+        """If a download was generated, obtain the file again"""
+        ... # TODO
+
     def _recv(self, msg):
         """Process log messages from the `ecmwfapi.RequestAPI` object"""
         # Synchronize the status with that of the request on the server
@@ -225,6 +242,7 @@ class APIRequestFuture:
         
         Cancels the local future, not the request on the ECMWF server.
         """
+        # TODO emit warning
         return self._future.cancel()
 
     def cancelled(self):

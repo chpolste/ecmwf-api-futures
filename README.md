@@ -6,6 +6,8 @@ Provides replacements for `ECMWFDataServer` and `ECMWFService` that execute requ
 A future is returned for every request that tracks its status on the server.
 This allows better error handling and concurrent submission of requests (but be aware of [request limits](https://confluence.ecmwf.int/display/UDOC/Total+number+of+requests+a+user+can+submit+-+Web+API+FAQ)).
 
+This is not official software from the ECMWF and the author of this software is not affiliated with the ECMWF.
+
 
 ## Dependencies
 
@@ -22,9 +24,14 @@ To install as a package, run
 from the root of the repository.
 
 
+## Usage
+
+TODO
+
+
 ## License
 
-Copyright 2019 Christopher Polster
+Copyright 2019-2020 Christopher Polster
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
