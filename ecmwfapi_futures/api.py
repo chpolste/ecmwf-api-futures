@@ -1,3 +1,4 @@
+import json
 import warnings
 import datetime as dt
 from concurrent import futures
@@ -30,7 +31,10 @@ class ECMWFDataServer:
         `defaults` can be set to a request template that provides non-changing
         fields for every request submitted with `ECMWFDataServer.retrieve()`.
 
-        `write_logs` TODO
+        `write_logs` if `True`, a log file is written for each output file that
+        contains the same content as the `messages` attribute of the returned
+        futures. The log has the same name as the output file but an additional
+        `.log` extension.
 
         If `url`, `key` and `email` are not specified the API authentication
         information is read from the environment.
@@ -123,6 +127,7 @@ class APIRequestFuture:
         # local path issues
         self.target = request.pop("target")
         # ecmwfapi.APIRequest result fields
+        self.code = None
         self.href = None
         self.size = None
         self.type = None
@@ -135,16 +140,28 @@ class APIRequestFuture:
             self.add_status_callback(status_callback)
         # Keep track of elapsed time at all status changes
         self._elapsed_log = []
-        # If a log file should be written, create it and initialize
+        # Field for the file handle of the log file (if desired)
         self.log_file = None
-        if write_log:
-            ... # Write the request parameters TODO
-            ... # Open a section for the messages that the request sends TODO
-            ... # Finally (this must happen somewhere else), write information
-                # about the future (elapsed times, error codes, etc.). TODO
         # Instanciate and execute ecmwfapi.APIRequest object in separate
         # thread. Both communicate with the ECMWF server and are blocking.
         def execute():
+            # Initialize the log file. The log file is closed when the future
+            # changes its state to done (see _done_callback method)
+            if write_log:
+                # Name of the logfile is that same as that of the target but
+                # with an additional .log extension
+                self.log_file = open(self.target + ".log", "w")
+                # Write the request parameters
+                self._write_log("=== REQUEST ===")
+                self._write_log("Service: {}".format(service))
+                self._write_log("Target : {}".format(self.target))
+                self._write_log("Request:")
+                if isinstance(self.request, str):
+                    self._write_log(*self.request.strip().splitlines())
+                else:
+                    self._write_log(*json.dumps(self.request, indent=4).splitlines())
+                # Open a section for the messages that the server sends
+                self._write_log("=== SERVER ===")
             # Suppress any calls to print in ecmwfapi by setting quiet=True and
             # verbose=False. Other messages are passed to self._recv.
             apireq = api.APIRequest(url=pool.url, service=service, email=pool.email, key=pool.key,
@@ -160,11 +177,11 @@ class APIRequestFuture:
                 raise
         self._future = pool._submit(execute)
         # Add a callback that processes the results of the API request
-        self._future.add_done_callback(self._callback)
+        self._future.add_done_callback(self._done_callback)
 
     def __repr__(self):
         elapsed_min = self.elapsed / dt.timedelta(minutes=1)
-        return "<APIRequestFuture id={} status={} elapsed={:.2f}min target={}>".format(self.id, self.status, elapsed_min, self.target)
+        return "<APIRequestFuture id={} target={} status={} elapsed={:.2f}min>".format(self.id, self.target, self.status, elapsed_min)
 
     @property
     def elapsed(self):
@@ -221,24 +238,49 @@ class APIRequestFuture:
         # Obtain the request id assigned by the server
         if msg.startswith("Request id: "):
             self.id = msg[12:].strip()
-        # Log all messages
-        self.messages.append(msg)
+        # Log all messages internally and in the log file if desired
+        self._write_log(msg)
 
-    def _callback(self, future):
+    def _done_callback(self, future):
         """Update fields when the wrapped future completes"""
         self.end_time = dt.datetime.utcnow()
         if future.cancelled():
             self.status = "cancelled"
         elif future.exception() is not None:
             self.status = "error"
+            self._write_log("=== ERROR ===")
+            self._write_log(str(future.exception()))
         else:
             result = future.result()
             self.href = result["href"] if "href" in result else None
             self.size = result["size"] if "size" in result else None
             self.type = result["type"] if "type" in result else None
+            # Finalize log with summarizing information
             if "messages" in result:
-                self.messages.append("=== REQUEST OUTPUT ===")
-                self.messages.extend(result["messages"])
+                # Messages attached to the request response
+                self._write_log("=== MARS ===")
+                self._write_log(*result["messages"])
+            # Information about the request responst 
+            self._write_log("=== OUTPUT ===")
+            self._write_log("href: {}".format(self.href))
+            self._write_log("size: {}".format(self.size))
+            self._write_log("type: {}".format(self.type))
+        self._write_log("=== ELAPSED ===")
+        for status, elapsed in self._elapsed_log:
+            elapsed_min = elapsed / dt.timedelta(minutes=1)
+            self._write_log("{:.2f} min to {}".format(elapsed_min, status))
+        # Close the log file which was opened when the future was created
+        if self.log_file is not None:
+            self.log_file.close()
+
+    def _write_log(self, *messages):
+        # Write to internal log
+        self.messages.extend(messages)
+        # Write to log file and force flush, so log files show up-to-date
+        # information while request is still running
+        if self.log_file is not None:
+            self.log_file.write("\n".join(messages) + "\n")
+            self.log_file.flush()
 
     def cancel(self):
         """See `concurrent.futures.Future.cancel`
