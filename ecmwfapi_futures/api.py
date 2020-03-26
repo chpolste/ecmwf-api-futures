@@ -1,4 +1,5 @@
 import json
+import re
 import warnings
 import datetime as dt
 from concurrent import futures
@@ -30,6 +31,7 @@ class ECMWFDataServer:
         
         `defaults` can be set to a request template that provides non-changing
         fields for every request submitted with `ECMWFDataServer.retrieve()`.
+        The defaults will not apply to requests written directly in MARS syntax.
 
         `write_logs` if `True`, a log file is written for each output file that
         contains the same content as the `messages` attribute of the returned
@@ -69,10 +71,12 @@ class ECMWFDataServer:
     # ECMWFDataServer interface
 
     def retrieve(self, request=None, status_callback=None):
-        """Submit a request to the ECMWF server and return a future that tracks its progess"""
+        """Submit a retrieve request to the ECMWF server
+
+        Returns a future that tracks the progess of the request.
+        """
         request_dct = self.defaults.copy()
         if request is not None:
-            # TODO: parse "regular" text-only mars requests if request is a string
             request_dct.update(request)
         # Unify handling of service argument for ECMWFDataServer and
         # ECMWFService by allowing a service field in requests analogous to the
@@ -80,13 +84,36 @@ class ECMWFDataServer:
         service = None
         assert not ("dataset" in request_dct and "service" in request_dct)
         if "dataset" in request_dct:
-            service = "datasets/{}".format(request_dct["dataset"])
+            service = "datasets/{}".format(request_dct.pop("dataset"))
         if "service" in request_dct:
-            service = "services/{}".format(request_dct["service"])
+            service = "services/{}".format(request_dct.pop("service"))
         if service is None:
             raise ValueError("dataset or service must be specified in the request")
+        # Determine target based on request dictionary
+        if "target" not in request_dct:
+            raise ValueError("target must be specified in the request")
+        target = request_dct.pop("target")
         # Submit request, return associated future
-        return APIRequestFuture(self, service, request_dct, status_callback=status_callback, write_log=self.write_logs)
+        return APIRequestFuture(self, service, request_dct, target, status_callback, self.write_logs)
+
+    # Directly send MARS syntax to a service
+
+    def mars(self, service, request, target=None, status_callback=None):
+        """Execute requests written in MARS syntax"""
+        # Create proper service string
+        service = "services/{}".format(service)
+        # Extract target
+        if target is None:
+            regex = r"\b(tar|targ|targe|target)\s*=\s*([^\'\",\s]+|\"[^\"]*\"|\'[^\']*\')"
+            match = re.search(regex, request, re.IGNORECASE | re.MULTILINE)
+            if match is None:
+                raise ValueError("unable to extract target from the request")
+            target = match.group(2)
+            # Strip quotes if any are specified
+            if target[0] == target[-1] and target[0] in ("\"", "'"):
+                target = target[1:-1]
+        # Submit request, return associated future
+        return APIRequestFuture(self, service, request, target, status_callback=None)
 
 
 
@@ -104,6 +131,10 @@ class ECMWFService(ECMWFDataServer):
 
     def execute(self, request=None, target=None, status_callback=None):
         """Submit a request to the ECMWF server and return a future that tracks its progess"""
+        # Redirect "raw" MARS syntax requests to the mars method
+        if isinstance(request, str):
+            return self.mars(self.defaults["service"], request, target, status_callback)
+        # Other requests are assumed to be retrieve actions
         request = dict() if request is None else request.copy()
         if target is not None:
             request["target"] = target
@@ -118,14 +149,12 @@ class APIRequestFuture:
     should not be created directly.
     """
     
-    def __init__(self, pool, service, request, status_callback=None, write_log=True):
+    def __init__(self, pool, service, request, target, status_callback=None, write_log=True):
         self.messages = []
         self.request = request
         self._status = "waiting"
         self.id = None
-        # Pop target from the request dict, the server should not care about
-        # local path issues
-        self.target = request.pop("target")
+        self.target = target
         # ecmwfapi.APIRequest result fields
         self.code = None
         self.href = None
