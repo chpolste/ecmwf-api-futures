@@ -25,6 +25,12 @@ Features that are specific to ecmwf-api-futures:
 Both `ECMWFServerData` and `ECMWFService` implement the `Executor` interface of [concurrent.futures](https://docs.python.org/3/library/concurrent.futures.html#executor-objects).
 Compatible replacements for the functions `wait` and `as_completed` of that module are available too.
 
+If the module is run as
+
+    python -m ecmwfapi_futures ...
+
+it acts as a parallel implementation of the [mars](https://confluence.ecmwf.int//download/attachments/56664858/mars) script, accepting multiple input files containing one MARS request each.
+
 Please consult the docstrings and source code to obtain more information.
 
 
