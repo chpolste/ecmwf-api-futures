@@ -190,7 +190,7 @@ class APIRequestFuture:
                 else:
                     self._write_log(*json.dumps(self.request, indent=4).splitlines())
                 # Open a section for the messages that the server sends
-                self._write_log("=== SERVER ===")
+                self._write_log("", "=== SERVER ===")
             # Suppress any calls to print in ecmwfapi by setting quiet=True and
             # verbose=False. Other messages are passed to self._recv.
             apireq = api.APIRequest(url=pool.url, service=service, email=pool.email, key=pool.key,
@@ -277,24 +277,26 @@ class APIRequestFuture:
             self.status = "cancelled"
         elif future.exception() is not None:
             self.status = "error"
-            self._write_log("=== ERROR ===")
+            self._write_log("", "=== ERROR ===")
             self._write_log(str(future.exception()))
         else:
             result = future.result()
+            self.code = result["code"] if "code" in result else None
             self.href = result["href"] if "href" in result else None
             self.size = result["size"] if "size" in result else None
             self.type = result["type"] if "type" in result else None
             # Finalize log with summarizing information
             if "messages" in result:
                 # Messages attached to the request response
-                self._write_log("=== MARS ===")
+                self._write_log("", "=== MARS ===")
                 self._write_log(*result["messages"])
             # Information about the request responst 
-            self._write_log("=== OUTPUT ===")
+            self._write_log("", "=== OUTPUT ===")
+            self._write_log("code: {}".format(self.code))
             self._write_log("href: {}".format(self.href))
             self._write_log("size: {}".format(self.size))
             self._write_log("type: {}".format(self.type))
-        self._write_log("=== ELAPSED ===")
+        self._write_log("", "=== ELAPSED ===")
         for status, elapsed in self._elapsed_log:
             elapsed_min = elapsed / dt.timedelta(minutes=1)
             self._write_log("{:.2f} min to {}".format(elapsed_min, status))
