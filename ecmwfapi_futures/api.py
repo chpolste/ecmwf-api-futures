@@ -1,17 +1,10 @@
 import json
 import re
-import warnings
 import datetime as dt
 from concurrent import futures
 
 from ecmwfapi import api
 
-
-
-_MAX_REQUEST_WARNING = (
-            "No more than 3 (20) requests per user can be active (queued) at a time. "
-            "See: https://confluence.ecmwf.int/display/UDOC/Total+number+of+requests+a+user+can+submit+-+Web+API+FAQ"
-            )
 
 
 class ECMWFDataServer:
@@ -49,9 +42,6 @@ class ECMWFDataServer:
         self.key = key
         self.url = url
         self.email = email
-        # Warn user about request limits
-        if max_workers > 3:
-            warnings.warn(_MAX_REQUEST_WARNING, stacklevel=2)
         self._executor = futures.ThreadPoolExecutor(max_workers=max_workers)
 
     # Executor interface
@@ -255,10 +245,6 @@ class APIRequestFuture:
             raise TypeError("Argument is not callable")
         self._status_callbacks.append(fn)
 
-    def repeat_download(self):
-        """If a download was generated, obtain the file again"""
-        ... # TODO
-
     def _recv(self, msg):
         """Process log messages from the `ecmwfapi.RequestAPI` object"""
         # Synchronize the status with that of the request on the server
@@ -318,7 +304,6 @@ class APIRequestFuture:
         
         Cancels the local future, not the request on the ECMWF server.
         """
-        # TODO emit warning
         return self._future.cancel()
 
     def cancelled(self):
