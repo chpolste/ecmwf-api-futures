@@ -11,9 +11,7 @@ This is not official software from the ECMWF and the author of this software is 
 
 ## Features
 
-The methods `ECMWFServerData.retrieve` and `ECMWFService.execute` are replacements for the corresponding methods of [ecmwf-api-client](https://github.com/ecmwf/ecmwf-api-client).
-
-Features that are specific to ecmwf-api-futures:
+The methods `ECMWFServerData.retrieve` and `ECMWFService.execute` are replacements for the corresponding methods of [ecmwf-api-client](https://github.com/ecmwf/ecmwf-api-client). Features that are specific to ecmwf-api-futures:
 
 - Every request immediately returns a future, which tracks the progress of the request.
 - Multiple requests can be submitted.
