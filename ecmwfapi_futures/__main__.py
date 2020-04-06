@@ -6,6 +6,7 @@ https://confluence.ecmwf.int//download/attachments/56664858/mars
 
 import argparse
 import os
+from time import sleep
 from . import api
 
 
@@ -39,6 +40,7 @@ if __name__ == "__main__":
     server = api.ECMWFDataServer(max_workers=max_workers, write_logs=write_logs)
 
     def submit(request):
+        sleep(1) # Wait a second between requests
         return server.mars(service, request, status_callback=print_status)
 
     wait_all([submit(request) for request in requests])
